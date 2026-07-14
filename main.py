@@ -29,18 +29,18 @@ def input_odds_data():
     away_team = input("请输入客队名称 (例如: 北京国安): ").strip() or "客队"
     
     print_header("【胜平负赔率】")
-    win_odds = float(input("请输入主胜赔率 (例如: 1.80): ") or "1.80")
-    draw_odds = float(input("请输入平局赔率 (例如: 3.50): ") or "3.50")
-    lose_odds = float(input("请输入客胜赔率 (例如: 4.20): ") or "4.20")
+    win_odds = float(input("请输入主胜赔率 (例如: 1.80): ").replace("。", ".").strip() or "1.80")
+    draw_odds = float(input("请输入平局赔率 (例如: 3.50): ").replace("。", ".").strip() or "3.50")
+    lose_odds = float(input("请输入客胜赔率 (例如: 4.20): ").replace("。", ".").strip() or "4.20")
     
     print_header("【赔率压缩信息】")
-    original_odds = float(input("请输入初始赔率 (例如: 80): ") or "80")
-    current_odds = float(input("请输入当前赔率 (例如: 10): ") or "10")
+    original_odds = float(input("请输入初始赔率 (例如: 80): ").replace("。", ".").strip() or "80")
+    current_odds = float(input("请输入当前赔率 (例如: 10): ").replace("。", ".").strip() or "10")
     
     print_header("【总进球赔率】")
     print("输入各个进球数的赔率 (用逗号分隔)")
     print("例如: 8,4.5,3.2,3.8,5.5 表示 0球:8, 1球:4.5, 2球:3.2...")
-    goal_input = input("请输入 (回车使用默认值): ").strip()
+    goal_input = input("请输入 (回车使用默认值): ").replace("。", ".").strip()
     
     if goal_input:
         goal_odds_list = [float(x.strip()) for x in goal_input.split(",")]
@@ -51,7 +51,7 @@ def input_odds_data():
     print_header("【比分赔率】")
     print("输入各个比分的赔率 (格式: 1:0,2:0,2:1等)")
     print("例如: 1:0=8.5,2:0=8.0,2:1=7.5")
-    scores_input = input("请输入 (回车使用默认值): ").strip()
+    scores_input = input("请输入 (回车使用默认值): ").replace("。", ".").strip()
     
     if scores_input:
         scores = {}
