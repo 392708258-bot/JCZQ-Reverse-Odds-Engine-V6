@@ -1,0 +1,2 @@
+match_id,home_team,away_team,win_odds,draw_odds,lose_odds,original_odds,current_odds,goal_odds,scores
+001,演示主队,演示客队,1.80,3.50,4.20,80,10,"8,4.5,3.2,3.8,5.5","1:0=8.5,2:0=8.0,2:1=7.5"

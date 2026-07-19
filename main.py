@@ -5,7 +5,9 @@ JCZQ 竞彩官方赔率逆向解析引擎主程序
 完整的比赛分析系统入口
 """
 
-import json
+import csv
+import os
+
 from engine.direction_engine import analyze_direction
 from engine.compression_engine import analyze_compression
 from engine.goal_engine import analyze_goal_structure, score_goal_match
@@ -17,6 +19,116 @@ def print_header(text):
     print("\n" + "=" * 70)
     print(f"  {text}")
     print("=" * 70)
+
+
+def _normalize_key(value):
+    """标准化表头键名，方便兼容不同 CSV 列名。"""
+    return value.strip().lower().replace(" ", "").replace("_", "")
+
+
+def _read_csv_value(row, *candidates):
+    """从 CSV 行中读取指定字段。"""
+    if not row:
+        return None
+
+    for candidate in candidates:
+        if candidate in row:
+            return row[candidate]
+
+    normalized_map = {
+        _normalize_key(key): value for key, value in row.items() if key is not None
+    }
+    for candidate in candidates:
+        normalized_candidate = _normalize_key(candidate)
+        if normalized_candidate in normalized_map:
+            return normalized_map[normalized_candidate]
+
+    return None
+
+
+def parse_goal_odds(raw_value):
+    """将 CSV 中的进球赔率字符串解析成字典。"""
+    if raw_value is None:
+        return {}
+    if isinstance(raw_value, dict):
+        return {str(key): float(value) for key, value in raw_value.items()}
+    if isinstance(raw_value, (list, tuple)):
+        return {str(i): float(value) for i, value in enumerate(raw_value)}
+
+    text = str(raw_value).strip()
+    if not text:
+        return {}
+
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    return {str(i): float(part) for i, part in enumerate(parts)}
+
+
+def parse_scores(raw_value):
+    """将 CSV 中的比分赔率字符串解析成字典。"""
+    if raw_value is None:
+        return {}
+    if isinstance(raw_value, dict):
+        return {str(key): float(value) for key, value in raw_value.items()}
+
+    scores = {}
+    text = str(raw_value).strip()
+    if not text:
+        return scores
+
+    for item in text.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" in item:
+            score, odds = item.split("=", 1)
+            scores[score.strip()] = float(odds.strip())
+    return scores
+
+
+def load_match_from_csv(file_path):
+    """从 CSV 文件中加载比赛数据。"""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"CSV 文件不存在: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise ValueError("CSV 文件为空或缺少表头")
+
+        row = next(reader, None)
+        if row is None:
+            raise ValueError("CSV 文件中没有数据行")
+
+    match_id = _read_csv_value(row, "match_id", "id", "比赛id") or "001"
+    home_team = _read_csv_value(row, "home_team", "home", "主队", "主队名称") or "主队"
+    away_team = _read_csv_value(row, "away_team", "away", "客队", "客队名称") or "客队"
+
+    win_odds = float(_read_csv_value(row, "win_odds", "home_odds", "主胜赔率", "win") or 1.80)
+    draw_odds = float(_read_csv_value(row, "draw_odds", "draw", "平局赔率") or 3.50)
+    lose_odds = float(_read_csv_value(row, "lose_odds", "away_odds", "客胜赔率", "lose") or 4.20)
+
+    original_odds = float(_read_csv_value(row, "original_odds", "初始赔率") or 80)
+    current_odds = float(_read_csv_value(row, "current_odds", "当前赔率") or 10)
+
+    goal_odds = parse_goal_odds(_read_csv_value(row, "goal_odds", "goals", "进球赔率"))
+    scores = parse_scores(_read_csv_value(row, "scores", "比分赔率", "score_odds"))
+
+    return {
+        "match_id": match_id,
+        "home_team": home_team,
+        "away_team": away_team,
+        "direction": {
+            "win": win_odds,
+            "draw": draw_odds,
+            "lose": lose_odds,
+        },
+        "compression": {
+            "original": original_odds,
+            "current": current_odds,
+        },
+        "goals": goal_odds,
+        "scores": scores,
+    }
 
 
 def input_odds_data():
@@ -83,6 +195,60 @@ def input_odds_data():
         "goals": goal_odds,
         "scores": scores
     }
+
+
+def find_csv_files(search_roots=None):
+    """自动扫描项目目录下的 CSV 文件。"""
+    if search_roots is None:
+        search_roots = [os.getcwd(), os.path.join(os.getcwd(), "data")]
+
+    csv_files = []
+    seen = set()
+    for root in search_roots:
+        expanded_root = os.path.expanduser(root)
+        if not os.path.isdir(expanded_root):
+            continue
+        for current_root, _, files in os.walk(expanded_root):
+            for file_name in files:
+                if not file_name.lower().endswith(".csv"):
+                    continue
+                full_path = os.path.join(current_root, file_name)
+                if full_path not in seen:
+                    seen.add(full_path)
+                    csv_files.append(full_path)
+
+    return sorted(csv_files)
+
+
+def import_from_csv():
+    """自动扫描并导入项目中的 CSV 文件。"""
+    print_header("【从 CSV 导入】")
+    csv_files = find_csv_files()
+
+    if not csv_files:
+        print("未找到任何 CSV 文件，请先把文件放到项目目录或 data 目录下。")
+        return None
+
+    print("已扫描到以下 CSV 文件：")
+    for index, file_path in enumerate(csv_files, 1):
+        print(f"  {index}. {file_path}")
+
+    if len(csv_files) == 1:
+        selected_path = csv_files[0]
+    else:
+        choice = input("请选择要分析的文件编号（回车默认使用第 1 个）: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(csv_files):
+            selected_path = csv_files[int(choice) - 1]
+        else:
+            selected_path = csv_files[0]
+
+    try:
+        data = load_match_from_csv(selected_path)
+        print(f"成功加载 CSV 数据: {selected_path}")
+        return data
+    except Exception as exc:
+        print(f"导入失败: {exc}")
+        return None
 
 
 def analyze_match(data):
@@ -205,9 +371,10 @@ if __name__ == "__main__":
     print("请选择模式:")
     print("1. 演示模式 (查看演示数据分析结果)")
     print("2. 手动输入 (自己输入比赛数据)")
-    print("3. 退出")
+    print("3. 从 CSV 文件导入(自动扫描)")
+    print("4. 退出")
     
-    choice = input("\n请选择 (1/2/3): ").strip()
+    choice = input("\n请选择 (1/2/3/4): ").strip()
     
     if choice == "1":
         show_demo()
@@ -215,6 +382,10 @@ if __name__ == "__main__":
         data = input_odds_data()
         analyze_match(data)
     elif choice == "3":
+        data = import_from_csv()
+        if data:
+            analyze_match(data)
+    elif choice == "4":
         print("\n再见! 👋\n")
     else:
         print("\n无效选择!\n")
